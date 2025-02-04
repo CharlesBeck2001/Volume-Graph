@@ -1370,7 +1370,7 @@ if "preloaded_2" not in st.session_state:
     
     for asset in asset_list_day:
 
-        st.write(asset)
+        #st.write(asset)
         hourly_vol = get_last_day(asset, time_point['oldest_time'][0])
         preloaded_2[asset + ' Hourly Value'] = hourly_vol
     
@@ -1396,11 +1396,14 @@ time_ranges_chain = {
     "Week": 7,
     "Month": 30
 }
+
 chain_list = chain_fetch()
+chain_list_def = chain_list
 #chain_list = chain_list[:8]
 chain_list = ['Total'] + chain_list
 
 chain_list_day = chain_fetch_day()
+chain_list_day_def = chain_list_day
 
 chain_list_day = ['Total']+ chain_list_day
 
