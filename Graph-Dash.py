@@ -1822,7 +1822,7 @@ else:
                 name=asset,
                 customdata=pivot_data[['total_volume']],  # Attach total volume for the hour
                 hoverinfo="x+y",  # Show only the specific section hovered
-                hovertemplate="<b>Chain:</b> %{fullData.name}<br>"
+                hovertemplate="<b>Asset:</b> %{fullData.name}<br>"
                               "<b>Volume:</b> %{y}<br>"
                               "<b>Total Hourly Volume:</b> %{customdata[0]}<br>"
                               "<extra></extra>",  # Remove extra trace info
