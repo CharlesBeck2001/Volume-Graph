@@ -1534,6 +1534,7 @@ else:
         st.plotly_chart(fig, use_container_width=True)
 '''
 
+place_hold = '''
 if time_ranges_chain[selected_range_chain] is not None:
     # -------------------------------
     # DAILY VOLUME DATA (e.g. Week or Month)
@@ -1841,6 +1842,7 @@ else:
     
         # Show the chart
         st.plotly_chart(fig, use_container_width=True)
+        '''
 
 
 # Define a custom color palette with hex codes
