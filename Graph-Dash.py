@@ -2071,6 +2071,17 @@ if time_ranges_chain[selected_range_chain] is not None:
             hover_data={"day": "|%Y-%m-%d", "total_daily_volume": ":,.0f", "asset": True},
             color_discrete_map=color_map
         )
+        
+        # Add the total volume data to customdata for hover functionality
+        fig.update_traces(
+            customdata=merged_data[["day", "Total Volume"]].to_dict('records'),
+            hovertemplate=(
+                "<b>Asset:</b> %{text}<br>"
+                "<b>Volume in Asset:</b> %{y}<br>"
+                "<b>Total Volume in Bar:</b> %{customdata[1]}<br>"
+                "<extra></extra>"
+            )
+        )
     
         # Update layout
         fig.update_layout(
@@ -2132,7 +2143,14 @@ else:
                 x=pivot_data['date'],
                 y=pivot_data[asset],
                 name=asset,
-                marker=dict(color=color_map[asset])
+                marker=dict(color=color_map[asset]),
+                customdata=pivot_data[["total_volume"]].to_dict('records'),
+                hovertemplate=(
+                    "<b>Asset:</b> %{x}<br>"
+                    "<b>Volume in Asset:</b> %{y}<br>"
+                    "<b>Total Volume in Bar:</b> %{customdata[0]}<br>"
+                    "<extra></extra>"
+                )
             ))
     
         # Configure layout
