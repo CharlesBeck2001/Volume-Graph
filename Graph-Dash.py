@@ -1842,6 +1842,161 @@ else:
         # Show the chart
         st.plotly_chart(fig, use_container_width=True)
 
+
+if time_ranges_chain[selected_range_chain] is not None:
+    # -------------------------------
+    # DAILY VOLUME DATA (e.g. Week or Month)
+    # -------------------------------
+    data_list = []
+    # Loop through every chain to get its volume data
+    for chain in chain_list_def:
+        chain_data = st.session_state["preloaded_chain"][chain + " Volume Data"].copy()
+        
+        # Define the cutoff date based on the selected range
+        date_cutoff = today - timedelta(days=time_ranges_chain[selected_range_chain])
+        date_cutoff = date_cutoff.strftime('%Y-%m-%dT%H:%M:%S')
+    
+        # Filter the chain's data based on the cutoff date
+        chain_data = chain_data[pd.to_datetime(chain_data['day']) > pd.to_datetime(date_cutoff)]
+        chain_data["chain"] = chain  # Ensure chain name is present in data
+        data_list.append(chain_data)
+    
+    # Concatenate all chains’ data
+    data = pd.concat(data_list, ignore_index=True)
+    
+    if data.empty:
+        st.warning("No data available for the selected time range!")
+    else:
+        # Ensure the date column is datetime
+        data['day'] = pd.to_datetime(data['day'])
+    
+        # Calculate total volume per day
+        total_volume_per_day = data.groupby("day")["total_daily_volume"].sum().reset_index()
+        total_volume_per_day.rename(columns={"total_daily_volume": "Total Volume"}, inplace=True)
+    
+        # Merge total volume back into data
+        data = data.merge(total_volume_per_day, on="day", how="left")
+    
+        # 🔹 Custom hex color codes for chains
+        hex_colors = [
+            "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", 
+            "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", 
+            "#bcbd22", "#17becf"
+        ]
+    
+        unique_chains = data["chain"].unique()
+    
+        # If there are more chains than colors, add more
+        if len(unique_chains) > len(hex_colors):
+            extra_needed = len(unique_chains) - len(hex_colors)
+            if extra_needed > 0:
+                # Use a rainbow scale for additional colors if needed
+                extra_colors = px.colors.sample_colorscale("Rainbow", [i / extra_needed for i in range(extra_needed)])
+                hex_colors.extend(extra_colors)
+    
+        # Create color mapping for each chain using hex codes
+        color_map = {chain: hex_colors[i % len(hex_colors)] for i, chain in enumerate(unique_chains)}
+    
+        # Create a stacked bar chart using Plotly Express
+        fig = px.bar(
+            data,
+            x='day',
+            y='total_daily_volume',
+            color='chain',
+            title="Volume In The Last Week/Month",
+            labels={'day': 'Date', 'total_daily_volume': 'Volume'},
+            hover_data={'day': '|%Y-%m-%d', 'total_daily_volume': ':,.0f', 'chain': True, 'Total Volume': ':,.0f'},
+            color_discrete_map=color_map,  # Assign unique colors from hex codes
+        )
+    
+        # Update layout to stack the bars
+        fig.update_layout(
+            xaxis_title="Date",
+            yaxis_title="Volume",
+            legend_title="Chain",
+            hovermode="closest",  # Ensures only the section under the cursor is shown
+            barmode="stack"
+        )
+    
+        st.plotly_chart(fig, use_container_width=True)
+
+else:
+    # -------------------------------
+    # HOURLY VOLUME DATA (Day)
+    # -------------------------------
+    data_list = []
+    for chain in chain_list_day_def:
+        chain_data = st.session_state["preloaded_chain"][chain + " Day Volume"].copy()
+        if not chain_data.empty:
+            chain_data['date'] = chain_data['hour']
+        data_list.append(chain_data)
+    
+    data = pd.concat(data_list, ignore_index=True)
+    
+    if data.empty:
+        st.warning("No hourly data available for the latest day!")
+    else:
+        # Pivot to get total hourly volume per chain
+        pivot_data = data.pivot(index='date', columns='chain', values='total_hourly_volume').fillna(0)
+        
+        # Compute total volume per hour
+        pivot_data['total_volume'] = pivot_data.sum(axis=1)
+        
+        # Convert index to a column for plotting
+        pivot_data = pivot_data.reset_index()
+    
+        # 🔹 Custom hex color codes for chains
+        hex_colors = [
+            "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", 
+            "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", 
+            "#bcbd22", "#17becf"
+        ]
+    
+        unique_chains = pivot_data.columns[1:-1]  # Exclude date and total_volume columns
+    
+        # If there are more chains than colors, add more
+        if len(unique_chains) > len(hex_colors):
+            extra_needed = len(unique_chains) - len(hex_colors)
+            if extra_needed > 0:
+                # Use a rainbow scale for additional colors if needed
+                extra_colors = px.colors.sample_colorscale("Rainbow", [i / extra_needed for i in range(extra_needed)])
+                hex_colors.extend(extra_colors)
+    
+        # Create color mapping for each chain using hex codes
+        color_map = {chain: hex_colors[i % len(hex_colors)] for i, chain in enumerate(unique_chains)}
+    
+        # Create figure manually using go.Figure()
+        fig = go.Figure()
+    
+        # Add each chain as a stacked bar segment
+        for chain in pivot_data.columns[1:-1]:  # Skip 'date' and 'total_volume'
+            fig.add_trace(go.Bar(
+                x=pivot_data['date'],
+                y=pivot_data[chain],
+                name=chain,
+                customdata=pivot_data[['total_volume']],  # Attach total volume for the hour
+                hoverinfo="x+y",  # Show only the specific section hovered
+                hovertemplate="<b>Chain:</b> %{fullData.name}<br>"
+                              "<b>Volume:</b> %{y}<br>"
+                              "<b>Total Hourly Volume:</b> %{customdata[0]}<br>"
+                              "<extra></extra>",  # Remove extra trace info
+                marker=dict(color=color_map[chain])  # Assign unique color from hex codes
+            ))
+    
+        # Configure layout
+        fig.update_layout(
+            title="Volume By Hour For Latest Calendar Day of Active Trading",
+            xaxis_title="Date & Time",
+            yaxis_title="Volume",
+            legend_title="Chain",
+            barmode="stack",  # Keep stacked format
+            hovermode="closest",  # Fix: Only show the specific section hovered
+        )
+    
+        # Show the chart
+        st.plotly_chart(fig, use_container_width=True)
+
+
 # Define a strong set of hex colors
 predefined_colors = [
     "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", 
