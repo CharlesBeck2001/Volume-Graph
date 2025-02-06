@@ -2037,6 +2037,11 @@ if time_ranges_chain[selected_range_chain] is not None:
     
         # Merge with total volume data
         data_total = data_total[["day", "total_daily_volume"]].rename(columns={"total_daily_volume": "Total Volume"})
+
+        # Ensure 'day' columns are datetime in both DataFrames before merging
+        data_total['day'] = pd.to_datetime(data_total['day'])
+        asset_total_per_day['day'] = pd.to_datetime(asset_total_per_day['day'])
+        
         merged_data = data_total.merge(asset_total_per_day, on="day", how="left").fillna(0)
     
         # Compute "Other" category as the difference
