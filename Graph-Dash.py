@@ -1841,3 +1841,154 @@ else:
     
         # Show the chart
         st.plotly_chart(fig, use_container_width=True)
+
+# Define a strong set of hex colors
+predefined_colors = [
+    "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", 
+    "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
+]
+
+if time_ranges_chain[selected_range_chain] is not None:
+    # Load total volume data
+    data_total = st.session_state["preloaded_chain"]["Total Volume Data"]
+    
+    # Define date cutoff based on selected range
+    date_cutoff = today - timedelta(days=time_ranges_chain[selected_range_chain])
+    date_cutoff = date_cutoff.strftime('%Y-%m-%dT%H:%M:%S')
+    
+    # Filter total volume data
+    data_total = data_total[pd.to_datetime(data_total['day']) > pd.to_datetime(date_cutoff)]
+    data_total['day'] = pd.to_datetime(data_total['day'])
+    
+    # Load asset-specific volume data
+    data_list = []
+    for asset in asset_list_2:
+        asset_data = st.session_state['preloaded_2'][asset + ' Daily Value'].copy()
+    
+        # Filter based on cutoff date
+        asset_data = asset_data[pd.to_datetime(asset_data['day']) > pd.to_datetime(date_cutoff)]
+        asset_data["asset"] = asset  # Ensure asset name is included
+        data_list.append(asset_data)
+    
+    # Concatenate asset volume data
+    data = pd.concat(data_list, ignore_index=True)
+    
+    if data.empty or data_total.empty:
+        st.warning("No data available for the selected time range!")
+    else:
+        # Compute total volume per day from asset data
+        asset_total_per_day = data.groupby("day")["total_daily_volume"].sum().reset_index()
+        asset_total_per_day.rename(columns={"total_daily_volume": "Asset Total"}, inplace=True)
+    
+        # Merge with total volume data
+        data_total = data_total[["day", "total_daily_volume"]].rename(columns={"total_daily_volume": "Total Volume"})
+        merged_data = data_total.merge(asset_total_per_day, on="day", how="left").fillna(0)
+    
+        # Compute "Other" category as the difference
+        merged_data["Other"] = merged_data["Total Volume"] - merged_data["Asset Total"]
+        merged_data.loc[merged_data["Other"] < 0, "Other"] = 0  # Ensure no negative values
+    
+        # Append "Other" category to data
+        other_data = merged_data[["day", "Other"]].copy()
+        other_data["asset"] = "Other"
+        other_data.rename(columns={"Other": "total_daily_volume"}, inplace=True)
+    
+        data = pd.concat([data, other_data], ignore_index=True)
+    
+        # Assign colors using hex codes
+        unique_assets = data["asset"].unique()
+        color_map = {}
+        
+        for i, asset in enumerate(unique_assets):
+            if asset == "Other":
+                color_map[asset] = "#A9A9A9"  # Dark gray for "Other"
+            else:
+                color_map[asset] = predefined_colors[i % len(predefined_colors)]
+    
+        # Create stacked bar chart
+        fig = px.bar(
+            data,
+            x="day",
+            y="total_daily_volume",
+            color="asset",
+            title="Volume In The Last Week/Month",
+            labels={"day": "Date", "total_daily_volume": "Volume"},
+            hover_data={"day": "|%Y-%m-%d", "total_daily_volume": ":,.0f", "asset": True},
+            color_discrete_map=color_map
+        )
+    
+        # Update layout
+        fig.update_layout(
+            xaxis_title="Date",
+            yaxis_title="Volume",
+            legend_title="Asset",
+            hovermode="closest",
+            barmode="stack"
+        )
+    
+        st.plotly_chart(fig, use_container_width=True)
+
+else:
+    # -------------------------------
+    # HOURLY VOLUME DATA (Day)
+    # -------------------------------
+    # Load total hourly volume data
+    data_total = st.session_state["preloaded_chain"]["Total Day Volume"].copy()
+    data_total['date'] = data_total['hour']
+    
+    # Load asset-specific hourly volume data
+    data_list = []
+    for asset in asset_list_day_2:
+        asset_data = st.session_state["preloaded_2"][asset + ' Hourly Value'].copy()
+        if not asset_data.empty:
+            asset_data['date'] = asset_data['hour']
+        data_list.append(asset_data)
+    
+    # Concatenate asset data
+    data = pd.concat(data_list, ignore_index=True)
+    
+    if data.empty or data_total.empty:
+        st.warning("No hourly data available for the latest day!")
+    else:
+        # Pivot to get total hourly volume per chain
+        pivot_data = data.pivot(index='date', columns='asset', values='total_hourly_volume').fillna(0)
+    
+        # Compute "Other" category as the difference between total recorded volume and the sum of all known assets
+        pivot_data["Other"] = data_total.set_index("date")["total_hourly_volume"] - pivot_data.sum(axis=1)
+        pivot_data["Other"] = pivot_data["Other"].clip(lower=0)  # Ensure no negative values
+    
+        # Compute total volume per hour
+        pivot_data["total_volume"] = pivot_data.sum(axis=1)
+    
+        # Convert index to a column for plotting
+        pivot_data = pivot_data.reset_index()
+    
+        # Assign colors using hex codes
+        unique_assets = pivot_data.columns[1:-1]  # Exclude 'date' and 'total_volume' columns
+        color_map = {asset: predefined_colors[i % len(predefined_colors)] for i, asset in enumerate(unique_assets)}
+        color_map["Other"] = "#A9A9A9"  # Dark gray for "Other"
+    
+        # Create figure manually using go.Figure()
+        fig = go.Figure()
+    
+        # Add each asset as a stacked bar segment
+        for asset in unique_assets:
+            fig.add_trace(go.Bar(
+                x=pivot_data['date'],
+                y=pivot_data[asset],
+                name=asset,
+                marker=dict(color=color_map[asset])
+            ))
+    
+        # Configure layout
+        fig.update_layout(
+            title="Volume By Hour For Latest Calendar Day of Active Trading",
+            xaxis_title="Date & Time",
+            yaxis_title="Volume",
+            legend_title="Asset",
+            barmode="stack",
+            hovermode="closest"
+        )
+    
+        # Show the chart
+        st.plotly_chart(fig, use_container_width=True)
