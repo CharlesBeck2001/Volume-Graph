@@ -225,10 +225,11 @@ for chain in plot_df['chain'].unique():
                 "Sender: %{customdata[1]}<br>" +
                 "Chain: %{text}<br>" +
                 "Time: %{x}<br>" +
+                "Transaction: %{customdata[2]}<br>" +
                 "Cumulative: $%{y:,.2f}"
             ),
             text=chain_data['chain'],
-            customdata=np.column_stack((chain_data['volume'],chain_data['wallet']))
+            customdata=np.column_stack((chain_data['volume'],chain_data['wallet'],chain_data['transaction_hash']))
         )
     )
     fig.update_layout(
