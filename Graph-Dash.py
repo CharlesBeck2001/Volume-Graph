@@ -386,6 +386,138 @@ def create_stacked_bar_chart(df):
 fig = create_stacked_bar_chart(bar_values)
 st.plotly_chart(fig, use_container_width=True)
 
+## PLOT 2.5
+## PLOT 2 Groupings
+st.markdown("<hr>", unsafe_allow_html=True)
+
+grouped2_query = """
+with pre as (
+SELECT 
+    source_chain as chain,
+    source_id as asset,
+    source_volume as volume,
+    block_timestamp,
+    transaction_hash,
+    sender_address as wallet
+FROM public.main_volume_table
+UNION ALL
+SELECT 
+    dest_chain as chain,
+    dest_id as asset,
+    dest_volume as volume,
+    block_timestamp,
+    transaction_hash,
+    sender_address as wallet
+FROM public.main_volume_table
+)
+
+SELECT 
+asset, 
+date_trunc('day', block_timestamp) as day,
+sum(volume) as total_volume
+FROM pre
+WHERE block_timestamp >= CURRENT_TIMESTAMP - INTERVAL '7 days' AND volume>0
+GROUP BY asset, date_trunc('day', block_timestamp) 
+ORDER BY 
+    date_trunc('day', block_timestamp) ASC, SUM(volume) DESC
+"""
+try:
+    asset_values = execute_sql(grouped2_query)
+except Exception as e:
+    st.error(f"Error executing query: {str(e)}")
+
+
+def create_stacked_bar_chart(df):
+    # Ensure the 'day' column is in datetime format
+    df['day'] = pd.to_datetime(df['day'])
+    
+    # Helper function to add ordinal suffixes to day numbers (e.g., 1st, 2nd)
+    def ordinal(n):
+        n = int(n)
+        if 11 <= (n % 100) <= 13:
+            suffix = "th"
+        else:
+            suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+        return f"{n}{suffix}"
+    
+    # Create formatted day labels (e.g., "Feb 1st")
+    df['day_label'] = df['day'].apply(lambda d: d.strftime("%b ") + ordinal(d.day))
+    
+    # Calculate total volume per asset across all days
+    asset_totals = df.groupby('asset')['total_volume'].sum().sort_values(ascending=False)
+    # Determine the top 5 asset IDs
+    top_assets = asset_totals.head(5).index.tolist()
+    
+    # Create a new column 'asset_group': if the asset is in the top 5, keep it; otherwise, label it as 'Other'
+    df['asset_group'] = df['asset'].apply(lambda a: a if a in top_assets else 'Other')
+    
+    # Group by the new asset_group and day, summing total_volume so that non–top-5 assets aggregate as 'Other'
+    df_grouped = df.groupby(['asset_group', 'day']).agg({'total_volume': 'sum'}).reset_index()
+    
+    # Recreate the day_label for the grouped data
+    df_grouped['day_label'] = df_grouped['day'].apply(lambda d: d.strftime("%b ") + ordinal(d.day))
+    
+    # Determine the ordering of asset groups based on total volume.
+    # Top assets in descending order, then add 'Other' at the end (if present).
+    group_totals = df_grouped.groupby('asset_group')['total_volume'].sum()
+    sorted_groups = group_totals.drop('Other', errors='ignore').sort_values(ascending=False).index.tolist()
+    if 'Other' in group_totals:
+        sorted_groups.append('Other')
+    
+    # Create the Plotly figure
+    fig = go.Figure()
+    
+    for asset in sorted_groups:
+        asset_data = df_grouped[df_grouped['asset_group'] == asset].sort_values(by='day')
+        # Do not specify marker_color to use the default Plotly colors.
+        fig.add_trace(go.Bar(
+            name=str(asset),
+            x=asset_data['day_label'],
+            y=asset_data['total_volume'],
+            marker_line=dict(color='black', width=1)
+        ))
+    
+    # Update layout settings
+    fig.update_layout(
+        title={
+            'text': 'Mach Volume by Asset',
+            'y': 0.95,
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top'
+        },
+        xaxis_title='Date',
+        yaxis_title='Volume',
+        barmode='stack',
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0
+        ),
+        xaxis=dict(
+            type='category',
+            tickangle=45
+        ),
+        height=600
+    )
+    
+    return fig
+
+# Assuming bar_values is the DataFrame returned from your SQL query,
+# which contains columns: asset, day, total_volume, etc.
+# Create and display the chart in Streamlit.
+fig = create_stacked_bar_chart(asset_values)
+st.plotly_chart(fig, use_container_width=True)
+
+##END
+
+
+
+
+
 
 ## PLOT 3
 st.markdown("<hr>", unsafe_allow_html=True)
