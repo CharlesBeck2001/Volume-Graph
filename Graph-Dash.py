@@ -8,8 +8,8 @@ from datetime import datetime, timedelta
 import numpy as np
 
 # Retrieve secrets from the secrets.toml file via st.secrets
-supabase_url = st.secrets["url"]
-supabase_key = st.secrets["key"]
+supabase_url = st.secrets["supabase"]["url"]
+supabase_key = st.secrets["supabase"]["key"]
 
 st.set_page_config(
     page_title="Tristero's Mach Exchange",
